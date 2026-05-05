@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
 	pthread_mutex_init(&total_lock,NULL);
 	readf(fp);
 	for(i=0;i<NUM_THREADS;i++){
-		rc=pthread_create(&threads[i],NULL,sub_string,(void *)i);
+		rc=pthread_create(&threads[i],NULL,sub_string,(void *)(long)i);
 		if (rc){
 			printf("ERROR: return error from pthread_create() is %d\n", rc);
 			exit(-1);
@@ -55,7 +55,7 @@ int readf(FILE *fp)
 		return -1;
 	}
 	s2=(char *)malloc(sizeof(char)*MAX);
-	if(s1==NULL){
+	if(s2==NULL){
 		printf("ERROR: Out of memory\n");
 		return -1;
 	}
@@ -67,15 +67,45 @@ int readf(FILE *fp)
 	nlocal=n1/NUM_THREADS;  /*data length held by process*/
 	if(s1==NULL || s2==NULL ||n1<n2)  /*when error exit*/
 		return -1;
+	return 0;
 }
 
 void *sub_string(void *threadid) 	/*each process searches in the string with the step of nprocs until it reach or beyond*/ 
 	/*the (n1-n2)th char which is the last possible beginning of the substring*/
 {
+	int tid = (int)(long)threadid;
+	int start, end;
+	int i, j, k;
+	int local_count = 0;
+	int count;
 
+	start = tid * nlocal;
+	end = start + nlocal -n2;
+
+	if(tid == NUM_THREADS -1){
+		end = n1 - n2;
+	}
+
+	 for(i = start; i <= end; i++) {
+        count = 0;
+        for(j = i, k = 0; k < n2; j++, k++) {
+            if(*(s1 + j) != *(s2 + k)) {
+                break;
+            } else {
+                count++;
+            }
+        }
+        if(count == n2) {
+            local_count++;
+        }
+    }
+
+	pthread_mutex_lock(&total_lock);
+    total += local_count;
+    pthread_mutex_unlock(&total_lock);
+    
+    pthread_exit(NULL);
 }
-
-
 
 
 

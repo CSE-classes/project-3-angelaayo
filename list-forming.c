@@ -47,6 +47,7 @@ struct Node* generate_data_node()
 
     if( NULL != ptr ){
         ptr->next = NULL;
+        ptr->data =1;
     }
     else {
         printf("Node allocation failed!\n");
@@ -58,8 +59,10 @@ void * producer_thread( void *arg)
 {
     bind_thread_to_cpu(*((int*)arg));//bind this thread to a CPU
 
-    struct Node * ptr, tmp;
-    int counter = 0;  
+    int counter = 0;
+    struct Node *local_header = NULL;
+    struct Node *local_tail = NULL;
+    struct Node *ptr; 
 
     /* generate and attach K nodes to the global list */
     while( counter  < K )
@@ -68,29 +71,35 @@ void * producer_thread( void *arg)
 
         if( NULL != ptr )
         {
-            while(1)
+            if(local_header == NULL)
             {
-		/* access the critical region and add a node to the global list */
-                if( !pthread_mutex_trylock(&mutex_lock) )
-                {
-                    ptr->data  = 1;//generate data
-		    /* attache the generated node to the global list */
-                    if( List->header == NULL )
-                    {
-                        List->header = List->tail = ptr;
-                    }
-                    else
-                    {
-                        List->tail->next = ptr;
-                        List->tail = ptr;
-                    }                    
-                    pthread_mutex_unlock(&mutex_lock);
-                    break;
-                }
+                local_header = local_tail = ptr;
+            }
+            else
+            {
+                local_tail->next = ptr;
+                local_tail = ptr;
             }           
         }
         ++counter;
     }
+    if(local_header != NULL){
+        pthread_mutex_lock(&mutex_lock);
+        if(List->header == NULL)
+        {
+            List->header = local_header;
+            List->tail = local_tail;
+        }
+        else
+        {
+            List->tail->next = local_header;
+            List->tail = local_tail;
+        }
+        
+        pthread_mutex_unlock(&mutex_lock);
+    }
+
+    pthread_exit(NULL);
 }
 
 int main(int argc, char* argv[])
